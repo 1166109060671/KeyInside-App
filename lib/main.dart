@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:project_android/features/admin/admin_dashboard_page.dart';
-import 'package:project_android/features/admin/chats/admin_chat_list_page.dart';
-import 'package:project_android/features/chat/user_chat_page.dart';
-import 'package:project_android/features/coupons/my_coupons_page.dart';
-import 'package:project_android/features/orders/my_orders_page.dart';
+import 'package:keyinside/features/admin/admin_dashboard_page.dart';
+import 'package:keyinside/features/admin/chats/admin_chat_list_page.dart';
+import 'package:keyinside/features/chat/user_chat_page.dart';
+import 'package:keyinside/features/coupons/my_coupons_page.dart';
+import 'package:keyinside/features/orders/my_orders_page.dart';
 import 'firebase_options.dart';
 
 import 'package:provider/provider.dart';

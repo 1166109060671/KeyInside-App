@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:project_android/models/coupon.dart';
+import 'package:keyinside/models/coupon.dart';
 
 import '../models/game_product.dart';
 

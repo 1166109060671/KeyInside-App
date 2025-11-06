@@ -2,14 +2,14 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <application
-        android:label="project_android"
+        android:label="KeyInside"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:networkSecurityConfig="@xml/network_security_config">
 
         <!-- Main Flutter Activity -->
         <activity
-            android:name=".MainActivity"
+            android:name="th.ac.rmuttt.ct.keyinside.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""

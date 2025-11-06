@@ -3,8 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:project_android/models/coupon.dart';
-import 'package:project_android/services/firestore_service.dart';
+import 'package:keyinside/models/coupon.dart';
+import 'package:keyinside/services/firestore_service.dart';
 
 class CouponDiscoverPage extends StatelessWidget {
   const CouponDiscoverPage({super.key});

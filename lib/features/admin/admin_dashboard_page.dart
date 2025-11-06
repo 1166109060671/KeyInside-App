@@ -7,8 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
-import 'package:project_android/features/admin/chats/admin_chat_list_page.dart';
-import 'package:project_android/features/admin/order_detail_page.dart';
+import 'package:keyinside/features/admin/chats/admin_chat_list_page.dart';
+import 'package:keyinside/features/admin/order_detail_page.dart';
 
 import '../../models/coupon.dart';
 import '../../models/game_product.dart';

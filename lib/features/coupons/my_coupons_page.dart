@@ -2,9 +2,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:project_android/app/app_routes.dart'; 
-import 'package:project_android/models/coupon.dart';
-import 'package:project_android/services/firestore_service.dart';
+import 'package:keyinside/app/app_routes.dart'; 
+import 'package:keyinside/models/coupon.dart';
+import 'package:keyinside/services/firestore_service.dart';
 
 class MyCouponsPage extends StatelessWidget {
   const MyCouponsPage({super.key});
