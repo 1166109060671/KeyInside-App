@@ -28,7 +28,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 4, vsync: this); // 4 แท็บ
+    _tabCtrl = TabController(length: 5, vsync: this); // ✅ Summary = tab ที่ 5
     _tabCtrl.addListener(() => setState(() {}));
   }
 
@@ -54,6 +54,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
             Tab(icon: Icon(Icons.receipt_long_outlined), text: 'Orders'),
             Tab(icon: Icon(Icons.chat_bubble_outline), text: 'Chats'),
             Tab(icon: Icon(Icons.local_offer_outlined), text: 'Coupons'),
+            Tab(icon: Icon(Icons.analytics_outlined), text: 'Summary'),
           ],
         ),
       ),
@@ -65,6 +66,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           _OrdersBody(),
           AdminChatListPage(),
           _CouponsBody(),
+          _SummaryBody(),
         ],
       ),
       floatingActionButton: (isProductsTab || isCouponsTab)
@@ -171,7 +173,7 @@ class _ProductsBody extends StatelessWidget {
                       onPressed: () async {
                         final ok = await showDialog<bool>(
                           context: context,
-                          useRootNavigator: true, // ✅ ป้องกัน pop ผิดตัว
+                          useRootNavigator: true,
                           builder: (dialogContext) => AlertDialog(
                             title: const Text('ลบสินค้า?'),
                             content: Text('ยืนยันลบ “${p.title}”'),
@@ -353,7 +355,7 @@ class _OrdersBodyState extends State<_OrdersBody> {
   }
 }
 
-/* 🚀 -------------------- COUPONS: BODY (ยืนยันลบกดได้แน่นอน) -------------------- */
+/* 🚀 -------------------- COUPONS: BODY -------------------- */
 class _CouponsBody extends StatelessWidget {
   const _CouponsBody();
 
@@ -453,6 +455,364 @@ class _CouponsBody extends StatelessWidget {
   }
 }
 
+/* -------------------- SUMMARY: BODY (กรองช่วงเวลาในแอปให้ “ตรง” กับ Orders) -------------------- */
+class _SummaryBody extends StatefulWidget {
+  const _SummaryBody();
+  @override
+  State<_SummaryBody> createState() => _SummaryBodyState();
+}
+
+class _SummaryBodyState extends State<_SummaryBody> {
+  final _money = NumberFormat('#,##0.00');
+  String _range = 'today'; // today | week | month | all
+
+  (DateTime? start, DateTime? end) _computeRange() {
+    final now = DateTime.now();
+    if (_range == 'all') return (null, null);
+    final startOfDay = DateTime(now.year, now.month, now.day);
+    if (_range == 'today') {
+      final s = startOfDay;
+      final e = s.add(const Duration(days: 1));
+      return (s, e);
+    } else if (_range == 'week') {
+      final weekday = startOfDay.weekday; // 1..7 (Mon..Sun)
+      final s = startOfDay.subtract(Duration(days: weekday - 1));
+      final e = s.add(const Duration(days: 7));
+      return (s, e);
+    } else {
+      final s = DateTime(now.year, now.month, 1);
+      final e = DateTime(now.year, now.month + 1, 1);
+      return (s, e);
+    }
+  }
+
+  bool _inRange(Map<String, dynamic> data, DateTime? start, DateTime? end,
+      {bool usePaidFirst = true}) {
+    // ใช้ paidAt ก่อน ถ้าไม่มี fallback createdAt
+    Timestamp? ts;
+    if (usePaidFirst) {
+      ts = data['paidAt'] as Timestamp?;
+      ts ??= data['createdAt'] as Timestamp?;
+    } else {
+      ts = data['createdAt'] as Timestamp?;
+      ts ??= data['paidAt'] as Timestamp?;
+    }
+    if (ts == null) return false;
+    final t = ts.toDate().toLocal();
+    if (start != null && t.isBefore(start)) return false;
+    if (end != null && !t.isBefore(end)) return false;
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final (start, end) = _computeRange();
+
+    // ดึงเฉพาะเอกสาร status=paid แล้วกรองเวลาในแอป
+    final paidStream = FirebaseFirestore.instance
+        .collection('orders')
+        .where('status', isEqualTo: 'paid')
+        .limit(1000)
+        .snapshots();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text('Today'),
+                selected: _range == 'today',
+                onSelected: (_) => setState(() => _range = 'today'),
+              ),
+              ChoiceChip(
+                label: const Text('This Week'),
+                selected: _range == 'week',
+                onSelected: (_) => setState(() => _range = 'week'),
+              ),
+              ChoiceChip(
+                label: const Text('This Month'),
+                selected: _range == 'month',
+                onSelected: (_) => setState(() => _range = 'month'),
+              ),
+              ChoiceChip(
+                label: const Text('All Time'),
+                selected: _range == 'all',
+                onSelected: (_) => setState(() => _range = 'all'),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: paidStream,
+                builder: (context, AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snap.hasError) {
+                    return Center(child: Text('เกิดข้อผิดพลาด: ${snap.error}'));
+                  }
+    
+                  final paidDocs = snap.data?.docs ?? const [];
+                  final filteredPaid = paidDocs
+                      .where((d) =>
+                          _inRange(d.data(), start, end, usePaidFirst: true))
+                      .toList();
+
+              double revenue = 0;
+              int paidOrders = 0;
+              final Map<String, int> methodCount = {};
+              final Map<String, int> productQty = {};
+
+              for (final d in filteredPaid) {
+                final data = d.data();
+                final total = ((data['total'] ?? 0) as num).toDouble();
+                revenue += total;
+                paidOrders++;
+
+                final method = (data['paymentMethod'] ?? '-').toString();
+                methodCount[method] = (methodCount[method] ?? 0) + 1;
+
+                final items = (data['items'] as List?) ?? const [];
+                for (final it in items) {
+                  if (it is Map) {
+                    final title =
+                        (it['title'] ?? it['productTitle'] ?? 'Unknown')
+                            .toString();
+                    final qty = (it['qty'] ?? it['quantity'] ?? 1) as num;
+                    productQty[title] = (productQty[title] ?? 0) + qty.toInt();
+                  }
+                }
+              }
+
+              final topProducts = productQty.entries.toList()
+                ..sort((a, b) => b.value.compareTo(a.value));
+
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+                children: [
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      _MetricCard(
+                        title: 'ยอดขายรวม',
+                        value: '฿ ${_money.format(revenue)}',
+                        icon: Icons.payments_outlined,
+                        color: cs.primaryContainer,
+                        onColor: cs.onPrimaryContainer,
+                      ),
+                      _MetricCard(
+                        title: 'ออเดอร์ชำระแล้ว',
+                        value: '$paidOrders',
+                        icon: Icons.receipt_long_outlined,
+                        color: cs.secondaryContainer,
+                        onColor: cs.onSecondaryContainer,
+                      ),
+                      _StatusCounter(range: _range, status: 'pending'),
+                      _StatusCounter(range: _range, status: 'cancelled'),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  if (methodCount.isNotEmpty) ...[
+                    Text('ช่องทางชำระเงิน',
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          children: methodCount.entries.map((e) {
+                            final method = e.key;
+                            final count = e.value;
+                            final pct =
+                                paidOrders == 0 ? 0 : (count * 100 / paidOrders);
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Row(
+                                children: [
+                                  Expanded(child: Text(method)),
+                                  Text('$count (${pct.toStringAsFixed(1)}%)'),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  Text('สินค้าขายดี',
+                      style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  if (topProducts.isEmpty)
+                    const Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text('ยังไม่มีข้อมูลในช่วงนี้'),
+                      ),
+                    )
+                  else
+                    Card(
+                      child: Column(
+                        children: topProducts.take(5).map((e) {
+                          return ListTile(
+                            leading: const Icon(
+                                Icons.local_fire_department_outlined),
+                            title: Text(e.key,
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                            trailing: Text('x${e.value}'),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// นับจำนวนออเดอร์ตามสถานะ โดยกรองช่วงเวลาในแอป (ใช้ createdAt ก่อน ถ้าไม่มีค่อย paidAt)
+class _StatusCounter extends StatelessWidget {
+  const _StatusCounter({required this.range, required this.status});
+  final String range; // today | week | month | all
+  final String status;
+
+  (DateTime? start, DateTime? end) _computeRange() {
+    final now = DateTime.now();
+    if (range == 'all') return (null, null);
+    final startOfDay = DateTime(now.year, now.month, now.day);
+    if (range == 'today') {
+      final s = startOfDay;
+      final e = s.add(const Duration(days: 1));
+      return (s, e);
+    } else if (range == 'week') {
+      final weekday = startOfDay.weekday;
+      final s = startOfDay.subtract(Duration(days: weekday - 1));
+      final e = s.add(const Duration(days: 7));
+      return (s, e);
+    } else {
+      final s = DateTime(now.year, now.month, 1);
+      final e = DateTime(now.year, now.month + 1, 1);
+      return (s, e);
+    }
+  }
+
+  bool _inRange(Map<String, dynamic> data, DateTime? start, DateTime? end) {
+    Timestamp? ts = data['createdAt'] as Timestamp?;
+    ts ??= data['paidAt'] as Timestamp?;
+    if (ts == null) return false;
+    final t = ts.toDate().toLocal();
+    if (start != null && t.isBefore(start)) return false;
+    if (end != null && !t.isBefore(end)) return false;
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final (start, end) = _computeRange();
+
+    final q = FirebaseFirestore.instance
+        .collection('orders')
+        .where('status', isEqualTo: status)
+        .limit(1000)
+        .snapshots();
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: q,
+      builder: (context, snap) {
+        int count = 0;
+        if (snap.hasData) {
+          count = snap.data!.docs
+              .where((d) => _inRange(d.data(), start, end))
+              .length;
+        }
+        final (bg, fg, icon) = _styleFor(status, cs);
+        return _MetricCard(
+          title: 'ออเดอร์ $status',
+          value: '$count',
+          icon: icon,
+          color: bg,
+          onColor: fg,
+        );
+      },
+    );
+  }
+
+  static (Color bg, Color fg, IconData icon) _styleFor(String s, ColorScheme cs) {
+    switch (s) {
+      case 'paid':
+        return (cs.secondaryContainer, cs.onSecondaryContainer, Icons.verified_outlined);
+      case 'cancelled':
+        return (Colors.red.withOpacity(.15), Colors.red, Icons.cancel_outlined);
+      case 'pending':
+      default:
+        return (cs.surfaceContainerHighest, cs.onSurfaceVariant, Icons.timelapse_outlined);
+    }
+  }
+}
+
+class _MetricCard extends StatelessWidget {
+  const _MetricCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.onColor,
+  });
+
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final Color onColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 260,
+      child: Card(
+        color: color,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: onColor, size: 22),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: onColor.withOpacity(.9),
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: onColor,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 /* -------------------- PRODUCT EDITOR -------------------- */
 class _ProductEditor extends StatefulWidget {
@@ -474,7 +834,6 @@ class _ProductEditorState extends State<_ProductEditor> {
 
   final _picker = ImagePicker();
   final List<String> _images = [];
-  // ✅ เพิ่ม: ตัวแปรสำหรับเก็บ Variants
   final List<VariantOption> _variants = [];
 
   @override
@@ -489,8 +848,7 @@ class _ProductEditorState extends State<_ProductEditor> {
       _priceCtl.text = e.price.toStringAsFixed(2);
       _stockCtl.text = e.stock.toString();
       _images.addAll(e.images);
-      
-      // ✅ โหลด Variants เดิม
+
       _variants.addAll(e.variants.values);
     }
   }
@@ -554,7 +912,6 @@ class _ProductEditorState extends State<_ProductEditor> {
     setState(() {});
   }
 
-  // ✅ เพิ่ม: เมธอดสำหรับเปิด Variant Editor Dialog
   Future<void> _openVariantEditor(BuildContext context,
       {VariantOption? existing, int? index}) async {
     final result = await showDialog<VariantOption>(
@@ -566,16 +923,13 @@ class _ProductEditorState extends State<_ProductEditor> {
     if (result != null) {
       setState(() {
         if (existing != null && index != null) {
-          // แก้ไข
           _variants[index] = result;
         } else {
-          // เพิ่มใหม่
           _variants.add(result);
         }
       });
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -714,7 +1068,6 @@ class _ProductEditorState extends State<_ProductEditor> {
             ),
 
             const SizedBox(height: 16),
-            // ====== ส่วนจัดการรูป ======
             Row(
               children: [
                 Text('รูป', style: Theme.of(context).textTheme.titleMedium),
@@ -793,9 +1146,8 @@ class _ProductEditorState extends State<_ProductEditor> {
                   );
                 }),
               ),
-              
+
             const SizedBox(height: 16),
-            // ✅ เพิ่ม: ====== ส่วนจัดการ Variants ======
             Row(
               children: [
                 Text('ตัวเลือกย่อย (Variants)',
@@ -857,7 +1209,6 @@ class _ProductEditorState extends State<_ProductEditor> {
                   );
                 },
               ),
-            // ✅ สิ้นสุดส่วนจัดการ Variants
 
             const SizedBox(height: 16),
             Row(
@@ -886,7 +1237,6 @@ class _ProductEditorState extends State<_ProductEditor> {
   Future<void> _save() async {
     if (_formKey.currentState?.validate() != true) return;
 
-    // ✅ แปลง List<VariantOption> กลับเป็น Map<String, VariantOption>
     final variantsMap = Map.fromIterable(
       _variants,
       key: (v) => (v as VariantOption).key,
@@ -900,8 +1250,8 @@ class _ProductEditorState extends State<_ProductEditor> {
       region: _regionCtl.text.trim(),
       price: double.parse(_priceCtl.text.trim()),
       stock: int.parse(_stockCtl.text.trim()),
-      images: _images, // บันทึกทั้ง URL และ Base64
-      variants: variantsMap, // ✅ เพิ่ม Variants
+      images: _images,
+      variants: variantsMap,
     );
 
     try {
@@ -945,10 +1295,9 @@ class _CouponEditorState extends State<_CouponEditor> {
   final _valueCtl = TextEditingController();
   final _minCtl = TextEditingController();
 
-  // ⬇️ ใหม่: จำกัดการใช้
-  final _perUserCtl = TextEditingController();   // ต่อผู้ใช้
-  final _globalCtl  = TextEditingController();   // รวมทั้งหมด
-  bool _welcomeOneTime = false;                  // ปุ่มลัด “Welcome (1/คน)”
+  final _perUserCtl = TextEditingController();
+  final _globalCtl = TextEditingController();
+  bool _welcomeOneTime = false;
 
   String _type = 'fixed'; // fixed | percentage
   DateTime _expiry = DateTime.now().add(const Duration(days: 30));
@@ -966,12 +1315,12 @@ class _CouponEditorState extends State<_CouponEditor> {
       _expiry = e.expiryDate.toDate();
 
       _perUserCtl.text = e.usageLimitPerUser.toString();
-      _globalCtl.text  = e.usageLimitGlobal.toString();
-      _welcomeOneTime  = e.usageLimitPerUser == 1;
+      _globalCtl.text = e.usageLimitGlobal.toString();
+      _welcomeOneTime = e.usageLimitPerUser == 1;
     } else {
       _perUserCtl.text = '0';
-      _globalCtl.text  = '0';
-      _welcomeOneTime  = false;
+      _globalCtl.text = '0';
+      _welcomeOneTime = false;
     }
   }
 
@@ -981,7 +1330,6 @@ class _CouponEditorState extends State<_CouponEditor> {
     _descCtl.dispose();
     _valueCtl.dispose();
     _minCtl.dispose();
-
     _perUserCtl.dispose();
     _globalCtl.dispose();
     super.dispose();
@@ -1030,8 +1378,8 @@ class _CouponEditorState extends State<_CouponEditor> {
             const SizedBox(height: 10),
             TextFormField(
               controller: _descCtl,
-              decoration: const InputDecoration(
-                  labelText: 'คำอธิบาย (เช่น ลด 10% ทั้งร้าน)'),
+              decoration:
+                  const InputDecoration(labelText: 'คำอธิบาย (เช่น ลด 10% ทั้งร้าน)'),
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'กรอกคำอธิบาย' : null,
             ),
@@ -1088,7 +1436,6 @@ class _CouponEditorState extends State<_CouponEditor> {
               ),
             ),
 
-            // ⬇️ ใหม่: UI จำกัดการใช้
             const SizedBox(height: 12),
             SwitchListTile(
               title: const Text('Welcome coupon (ใช้ได้คนละ 1 ครั้ง)'),
@@ -1165,9 +1512,8 @@ class _CouponEditorState extends State<_CouponEditor> {
         FirebaseFirestore.instance.collection('coupons').doc().id;
     final code = _codeCtl.text.trim().toUpperCase();
 
-    final perUser = _welcomeOneTime
-        ? 1
-        : (int.tryParse(_perUserCtl.text.trim()) ?? 0);
+    final perUser =
+        _welcomeOneTime ? 1 : (int.tryParse(_perUserCtl.text.trim()) ?? 0);
     final globalLimit = int.tryParse(_globalCtl.text.trim()) ?? 0;
 
     final data = {
@@ -1180,10 +1526,8 @@ class _CouponEditorState extends State<_CouponEditor> {
       'expiryDate': Timestamp.fromDate(_expiry),
       'createdAt': FieldValue.serverTimestamp(),
 
-      // ⬇️ ฟิลด์ใหม่สำหรับจำกัดการใช้
       'usageLimitPerUser': perUser,
       'usageLimitGlobal': globalLimit,
-      // ให้มีฟิลด์ตัวนับไว้เสมอ (ไม่ทับค่าปัจจุบันเพราะ service ใช้ merge)
       'currentUsageCount': FieldValue.increment(0),
     };
 
@@ -1216,7 +1560,7 @@ Future<void> _openEditor(BuildContext context, {GameProduct? existing}) async {
 /* -------------------- STATUS CHIP -------------------- */
 class _StatusChip extends StatelessWidget {
   const _StatusChip({required this.status});
-  final String status; // expect: pending | paid | cancelled
+  final String status; // pending | paid | cancelled
 
   @override
   Widget build(BuildContext context) {
@@ -1249,7 +1593,6 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-/// ยืนยันการลบคูปอง (ใช้ pageCtx ที่ระดับหน้า เพื่อหลีกเลี่ยง context เสื่อมสภาพ)
 Future<void> _confirmDeleteCoupon({
   required BuildContext pageCtx,
   required Coupon coupon,
@@ -1296,9 +1639,9 @@ Future<void> _confirmDeleteCoupon({
       SnackBar(content: Text('ลบคูปอง ${coupon.code} แล้ว')),
     );
   }
-} 
+}
 
-// ✅ เพิ่ม: Variant Editor Dialog
+// ✅ Variant Editor Dialog
 class _VariantEditorDialog extends StatefulWidget {
   const _VariantEditorDialog({this.existing});
   final VariantOption? existing;
