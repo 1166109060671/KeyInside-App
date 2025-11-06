@@ -42,8 +42,8 @@ class GameKeyApp extends StatelessWidget {
       ],
       child: MaterialApp(
         title: 'Game Key Shop',
-        theme: AppTheme.light,
-        darkTheme: AppTheme.dark,
+        theme: appTheme,
+        
         themeMode: ThemeMode.system,
         debugShowCheckedModeBanner: false,
 

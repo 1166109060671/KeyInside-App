@@ -1,44 +1,35 @@
 import 'package:flutter/material.dart';
 
-/*------------------------------------------------------
-  Theme: Material 3 + เบสิคที่ใช้ง่าย
--------------------------------------------------------*/
-class AppTheme {
-  AppTheme._();
+final ThemeData appTheme = ThemeData(
+  useMaterial3: true, // ✅ ถ้าใช้ Material 3
+  colorScheme: ColorScheme.fromSeed(
+    seedColor: const Color.fromARGB(255, 26, 58, 52), // 💡 สีหลักของแอป (เปลี่ยนตรงนี้)
+    brightness: Brightness.light,       // หรือ Brightness.dark สำหรับโหมดมืด
+  ),
 
-  static ThemeData light = ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.light,
-    colorSchemeSeed: const Color(0xFF4F46E5),
-    inputDecorationTheme: const InputDecorationTheme(
-      border: OutlineInputBorder(),
-    ),
-    appBarTheme: const AppBarTheme(
-      backgroundColor: Colors.white,
-      foregroundColor: Colors.black,
-      titleTextStyle: TextStyle(
-        fontSize: 25,
-        fontWeight: FontWeight.bold,
-        color: Colors.black,
-      ),
-    ),
-  );
+  // ✅ AppBar ทั่วแอป
+  appBarTheme: const AppBarTheme(
+    backgroundColor: Color.fromARGB(255, 26, 58, 52), // สีพื้นหลัง AppBar
+    foregroundColor: Colors.white,       // สีข้อความบน AppBar
+    centerTitle: false,
+    elevation: 1,
+  ),
 
-  static ThemeData dark = ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.dark,
-    colorSchemeSeed: const Color(0xFF4F46E5),
-    inputDecorationTheme: const InputDecorationTheme(
-      border: OutlineInputBorder(),
-    ),
-    appBarTheme: const AppBarTheme(
-      backgroundColor: Colors.black,
+  // ✅ ปุ่มทั่วแอป
+  elevatedButtonTheme: ElevatedButtonThemeData(
+    style: ElevatedButton.styleFrom(
+      backgroundColor: const Color.fromARGB(255, 32, 115, 72),
       foregroundColor: Colors.white,
-      titleTextStyle: TextStyle(
-        fontSize: 25,
-        fontWeight: FontWeight.bold,
-        color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(10)),
       ),
+      textStyle: const TextStyle(fontWeight: FontWeight.bold),
     ),
-  );
-}
+  ),
+
+  // ✅ สีพื้นหลังทั่วไป
+  scaffoldBackgroundColor: const Color(0xFFF9FAFB),
+
+  // ✅ ฟอนต์รวม (เช่น THSarabunNew)
+  fontFamily: 'THSarabunNew',
+);

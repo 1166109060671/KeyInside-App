@@ -181,7 +181,7 @@ class _LoginPageState extends State<LoginPage> {
                             border: border,
                           ),
                           validator: (v) =>
-                              (v != null && v.length >= 6) ? null : 'รหัสผ่านอย่างน้อย 6 ตัว',
+                              (v != null && v.length >= 6) ? null : 'รหัสผ่านอย่างน้อย 8 ตัว',
                         ),
                         const SizedBox(height: 12),
                         Align(

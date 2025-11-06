@@ -717,7 +717,7 @@ class _ProductEditorState extends State<_ProductEditor> {
             // ====== ส่วนจัดการรูป ======
             Row(
               children: [
-                Text('รูปสินค้า', style: Theme.of(context).textTheme.titleMedium),
+                Text('รูป', style: Theme.of(context).textTheme.titleMedium),
                 const Spacer(),
                 OutlinedButton.icon(
                   onPressed: _addUrlDialog,
@@ -745,8 +745,8 @@ class _ProductEditorState extends State<_ProductEditor> {
               )
             else
               Wrap(
-                spacing: 10,
-                runSpacing: 10,
+                spacing: 8,
+                runSpacing: 8,
                 children: List.generate(_images.length, (i) {
                   final s = _images[i];
                   Widget img;

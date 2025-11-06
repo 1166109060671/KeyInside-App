@@ -19,6 +19,13 @@ class _SignupPageState extends State<SignupPage> {
   bool _obscure = true;
   bool _loading = false;
 
+  // ✅ ตรวจสอบความแข็งแรงของรหัสผ่าน
+  bool _isStrongPassword(String v) {
+    // ต้องมีอย่างน้อย 8 ตัว และมีทั้งตัวพิมพ์เล็ก/ใหญ่
+    final re = RegExp(r'^(?=.*[a-z])(?=.*[A-Z]).{8,}$');
+    return re.hasMatch(v);
+  }
+
   @override
   void dispose() {
     _nameCtrl.dispose();
@@ -139,20 +146,25 @@ class _SignupPageState extends State<SignupPage> {
                       controller: _pwdCtrl,
                       obscureText: _obscure,
                       decoration: InputDecoration(
-                        labelText: 'Password (min 6)',
+                        labelText: 'Password (min 8, a-z & A-Z)',
+                        helperText: 'ต้องมีอย่างน้อย 8 ตัวอักษร และมีทั้งตัวเล็ก(a-z) กับตัวใหญ่(A-Z)',
                         prefixIcon: const Icon(Icons.lock_outline),
                         suffixIcon: IconButton(
                           onPressed: () => setState(() => _obscure = !_obscure),
-                          icon: Icon(_obscure
-                              ? Icons.visibility
-                              : Icons.visibility_off),
+                          icon: Icon(
+                            _obscure ? Icons.visibility : Icons.visibility_off,
+                          ),
                         ),
                         border: border,
                       ),
-                      validator: (v) =>
-                          (v != null && v.length >= 6)
-                              ? null
-                              : 'รหัสผ่านอย่างน้อย 6 ตัว',
+                      validator: (v) {
+                        final value = v ?? '';
+                        if (value.isEmpty) return 'กรอกรหัสผ่าน';
+                        if (!_isStrongPassword(value)) {
+                          return 'รหัสผ่านต้องมีอย่างน้อย 8 ตัว และมีทั้งตัวเล็ก(a-z) กับตัวใหญ่(A-Z)';
+                        }
+                        return null;
+                      },
                     ),
                     const SizedBox(height: 16),
                     SizedBox(
